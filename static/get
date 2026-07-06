@@ -16,7 +16,7 @@ case "$(uname -s)" in
   Darwin*) suffix="-apple-darwin";;
   FreeBSD*) suffix="-unknown-freebsd";;
   MINGW*|MSYS*|CYGWIN*)
-    echo "You are on Windows. Please visit sshx.io to download the executable.";
+    echo "You are on Windows. Please visit https://sshx.rtxk.org to download the executable.";
     exit 1;;
   *) echo "Unsupported OS $(uname -s)"; exit 1;;
 esac
@@ -29,7 +29,7 @@ case "$(uname -m)" in
   *) echo "Unsupported arch $(uname -m)"; exit 1;;
 esac
 
-url="https://s3.amazonaws.com/sshx/sshx-${arch}${suffix}.tar.gz"
+url="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-${arch}${suffix}.tar.gz"
 
 if [ -z "$NO_COLOR" ]; then
   ansi_reset="\033[0m"

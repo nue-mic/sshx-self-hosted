@@ -51,21 +51,27 @@ the public URL from hijacking the ID.
 
 ## Installation
 
-Build the client from source with [Rust](https://rust-lang.com/) installed:
+Install the `sshx` client with a single command. It downloads the right binary
+for your platform from this repo's GitHub Releases:
+
+```shell
+curl -sSf https://sshx.rtxk.org/get | sh
+```
+
+Use `sh -s run` to run it once without installing, or `sh -s download` to drop
+the binary in the current directory. Prebuilt binaries for macOS, Linux,
+Windows, and FreeBSD are also on the
+[releases page](https://github.com/nue-mic/sshx-self-hosted/releases/latest) and
+linked from the landing page at https://sshx.rtxk.org.
+
+Or build from source with [Rust](https://rust-lang.com/) installed:
 
 ```shell
 cargo install --path crates/sshx
 ```
 
-This compiles the `sshx` binary into your `~/.cargo/bin` folder. Prebuilt static
-binaries are also produced by CI (see [Self-hosting](#self-hosting)).
-
-Point the client at your own server and start a session:
-
-```shell
-sshx --server https://sshx.example.com
-# equivalently: SSHX_SERVER=https://sshx.example.com sshx
-```
+The client connects to `https://sshx.rtxk.org` by default; override it with
+`--server` or `SSHX_SERVER` to point at a different deployment.
 
 ## Self-hosting
 
@@ -73,8 +79,14 @@ On every push to `main`, CI (`.github/workflows/ci.yaml`) builds and publishes:
 
 - A **container image** for the server on the GitHub Container Registry:
   `ghcr.io/nue-mic/sshx-self-hosted:latest` (also tagged with the commit SHA).
-- **Static binaries** (`sshx` and `sshx-server`) for `x86_64-unknown-linux-musl`
-  and `aarch64-unknown-linux-musl`, uploaded as workflow build artifacts.
+- **Binaries** for `sshx` (client) and `sshx-server`, attached to a rolling
+  [`latest` release](https://github.com/nue-mic/sshx-self-hosted/releases/latest)
+  for macOS, Linux (musl), Windows, and FreeBSD. The `/get` script and the
+  landing page download buttons pull from this release.
+
+The `sshx-server` binary also serves the web frontend, so once it runs at your
+domain you automatically get the landing page and the `/get` install script
+there (e.g. `curl -sSf https://sshx.rtxk.org/get | sh`).
 
 ### Run the server with Docker
 
@@ -82,7 +94,7 @@ On every push to `main`, CI (`.github/workflows/ci.yaml`) builds and publishes:
 docker run -d --name sshx-server -p 8051:8051 \
   -e SSHX_SECRET="$(openssl rand -hex 32)" \
   ghcr.io/nue-mic/sshx-self-hosted:latest \
-  ./sshx-server --listen :: --override-origin https://sshx.example.com
+  ./sshx-server --listen :: --override-origin https://sshx.rtxk.org
 ```
 
 Notes:
@@ -97,6 +109,13 @@ Notes:
   enough.
 - Redis is optional and only needed to run a multi-server mesh; a single server
   runs fine without it (add `--redis-url` / `SSHX_REDIS_URL` to enable it).
+
+### DNS and domains
+
+Point `sshx.rtxk.org` (primary) at your server and set
+`--override-origin https://sshx.rtxk.org`. `sshx.rtxk.us` can be a second DNS
+record (A/AAAA or CNAME) to the same server as a mirror/backup; either domain
+then serves the same site.
 
 ### Server options
 

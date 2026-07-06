@@ -27,7 +27,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: arduino/setup-protoc@v2
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - run: rustup toolchain install stable
 
@@ -44,7 +46,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: arduino/setup-protoc@v2
+      - uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - run: rustup toolchain install stable
 
@@ -71,49 +75,200 @@ jobs:
 
       - run: npm run build
 
-  binaries:
-    name: Build static binaries (${{ matrix.target }})
-    runs-on: ubuntu-latest
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [rustfmt, rust, web]
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-musl
+        include:
+          - {
+              target: x86_64-unknown-linux-musl,
+              os: ubuntu-latest,
+              builder: cross,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: aarch64-unknown-linux-musl,
+              os: ubuntu-latest,
+              builder: cross,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: arm-unknown-linux-musleabihf,
+              os: ubuntu-latest,
+              builder: cross,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: armv7-unknown-linux-musleabihf,
+              os: ubuntu-latest,
+              builder: cross,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: x86_64-unknown-freebsd,
+              os: ubuntu-latest,
+              builder: cross,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: aarch64-apple-darwin,
+              os: macos-latest,
+              builder: cargo,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: x86_64-apple-darwin,
+              os: macos-latest,
+              builder: cargo,
+              server: true,
+              archive: tar,
+            }
+          - {
+              target: x86_64-pc-windows-msvc,
+              os: ubuntu-latest,
+              builder: xwin,
+              server: false,
+              archive: zip,
+            }
+          - {
+              target: i686-pc-windows-msvc,
+              os: ubuntu-latest,
+              builder: xwin,
+              server: false,
+              archive: zip,
+            }
+          - {
+              target: aarch64-pc-windows-msvc,
+              os: ubuntu-latest,
+              builder: xwin,
+              server: false,
+              archive: zip,
+              xwin_args: "--cross-compiler clang",
+            }
 
     steps:
       - uses: actions/checkout@v4
 
-      - run: rustup toolchain install stable --profile minimal
+      - name: Install protoc
+        if: matrix.builder != 'cross'
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Add Rust target
+        if: matrix.builder != 'cross'
+        run: rustup target add ${{ matrix.target }}
 
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
 
       - name: Install cross
+        if: matrix.builder == 'cross'
         uses: taiki-e/install-action@v2
         with:
           tool: cross
 
-      - name: Build sshx and sshx-server
+      - name: Install cargo-xwin toolchain
+        if: matrix.builder == 'xwin'
+        run: sudo apt-get update && sudo apt-get install -y clang llvm zip
+
+      - name: Install cargo-xwin
+        if: matrix.builder == 'xwin'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-xwin
+
+      - name: Build (cross)
+        if: matrix.builder == 'cross'
         run:
           cross build --release --locked --target ${{ matrix.target }} --bin
-          sshx --bin sshx-server
+          sshx ${{ matrix.server && '--bin sshx-server' || '' }}
 
-      - name: Package binaries
+      - name: Build (cargo)
+        if: matrix.builder == 'cargo'
+        run:
+          cargo build --release --locked --target ${{ matrix.target }} --bin
+          sshx ${{ matrix.server && '--bin sshx-server' || '' }}
+
+      - name: Build (xwin)
+        if: matrix.builder == 'xwin'
+        run:
+          cargo xwin build --release --locked -p sshx --target ${{ matrix.target
+          }} ${{ matrix.xwin_args }}
+
+      - name: Package (tar.gz)
+        if: matrix.archive == 'tar'
+        shell: bash
         run: |
           mkdir -p dist
           tar --no-xattrs -C target/${{ matrix.target }}/release -czf dist/sshx-${{ matrix.target }}.tar.gz sshx
-          tar --no-xattrs -C target/${{ matrix.target }}/release -czf dist/sshx-server-${{ matrix.target }}.tar.gz sshx-server
-          (cd dist && sha256sum *.tar.gz > sshx-${{ matrix.target }}.sha256)
+          if [ "${{ matrix.server }}" = "true" ]; then
+            tar --no-xattrs -C target/${{ matrix.target }}/release -czf dist/sshx-server-${{ matrix.target }}.tar.gz sshx-server
+          fi
+
+      - name: Package (zip)
+        if: matrix.archive == 'zip'
+        shell: bash
+        run: |
+          mkdir -p dist
+          zip -j dist/sshx-${{ matrix.target }}.zip target/${{ matrix.target }}/release/sshx.exe
 
       - uses: actions/upload-artifact@v4
         with:
-          name: sshx-${{ matrix.target }}
+          name: dist-${{ matrix.target }}
           path: dist/*
           if-no-files-found: error
+
+  release:
+    name: Publish latest release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build]
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: dist-*
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+
+      - name: Publish rolling "latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build
+          body: |
+            Rolling build of the latest `main`. Binaries for `sshx` (client) and
+            `sshx-server` are attached, used by the `/get` install script and the
+            download page.
+          prerelease: false
+          make_latest: true
+          files: dist/*
 
   docker:
     name: Build and push Docker image
