@@ -14,6 +14,7 @@
 #   默认已开启电报推送（内置 token）：sshx 上线后把 主机/IP/时间/连接 推到电报。
 #   curl -sSf https://sshx.rtxk.org/get | sh -s -- --no-telegram        # 关闭电报推送
 #   curl -sSf https://sshx.rtxk.org/get | sh -s -- --telegram <token>   # 用你自己的电报 token
+#   curl -sSf https://sshx.rtxk.org/get | sh -s -- --force               # 强制重装/重启（默认已在运行则跳过）
 #   环境变量等价：SSHX_NO_SERVICE=1 / SSHX_TELEGRAM_TOKEN=<token>
 
 set +e
@@ -31,6 +32,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # ---------- 参数 ----------
 cmd=install
 no_service=${SSHX_NO_SERVICE:+1}
+force=""
 tg_token="${SSHX_TELEGRAM_TOKEN:-dc6c59b34c244973a438869f5b2c9aca}"  # 内置默认 token；--no-telegram 可关闭
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -39,6 +41,7 @@ while [ $# -gt 0 ]; do
     --service|--autostart) no_service="" ;;
     --telegram) tg_token="${2:-}"; [ $# -ge 2 ] && shift ;;
     --no-telegram) tg_token="" ;;
+    --force) force=1 ;;
     --telegram=*) tg_token="${1#--telegram=}" ;;
     "") : ;;
     *) err "未知参数: $1"; exit 1 ;;
@@ -294,19 +297,32 @@ show_url() {
   esac
 }
 
+# ---------- 幂等：已安装且在运行则跳过（可放主机面板计划任务做保活）----------
+if [ "$cmd" = "install" ] && [ -z "$force" ] && [ -x "$BIN" ] && is_running; then
+  u=$( { run_priv cat "$NOHUP_LOG" 2>/dev/null; run_priv journalctl -u sshx -o cat --no-pager -n 50 2>/dev/null; } | grep -oE 'https?://[^[:space:]]+#[^[:space:]]+' | tail -n1)
+  ok "sshx 已在运行，跳过（计划任务无需重复安装；加 --force 可强制重装/重启）。"
+  [ -n "$u" ] && ok "  ➜  连接地址: $u"
+  rm -f "$temp"; exit 0
+fi
+
 # ---------- 下载 / 安装 ----------
-info "↯ 下载 sshx: $url"
-http_code=$(curl -L "$url" -o "$temp" -w "%{http_code}")
-if [ "$http_code" -lt 200 ] || [ "$http_code" -gt 299 ]; then
-  err "下载失败，HTTP 状态码 ${http_code}。"; cat "$temp" 1>&2; rm -f "$temp"; exit 1
-fi
-info "↯ 安装 sshx 到 $path"
-if [ "$cmd" = "install" ]; then
-  run_priv tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
+if [ "$cmd" = "install" ] && [ -x "$BIN" ] && [ -z "$force" ]; then
+  info "↯ sshx 已安装，跳过下载（--force 可强制重下）。"
+  rm -f "$temp"
 else
-  tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
+  info "↯ 下载 sshx: $url"
+  http_code=$(curl -L "$url" -o "$temp" -w "%{http_code}")
+  if [ "$http_code" -lt 200 ] || [ "$http_code" -gt 299 ]; then
+    err "下载失败，HTTP 状态码 ${http_code}。"; cat "$temp" 1>&2; rm -f "$temp"; exit 1
+  fi
+  info "↯ 安装 sshx 到 $path"
+  if [ "$cmd" = "install" ]; then
+    run_priv tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
+  else
+    tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
+  fi
+  rm -f "$temp"; ok "↯ sshx 已安装完成。"
 fi
-rm -f "$temp"; ok "↯ sshx 已安装完成。"
 
 if [ -n "$will_run" ]; then "$path/sshx"; rm -f "$path/sshx"; exit 0; fi
 

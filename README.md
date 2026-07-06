@@ -74,6 +74,11 @@ systemd / OpenRC / SysV，兼容各类 VPS/虚拟主机）、**立即在后台�
 - 容器等**没有 systemd/init** 的环境：会自动改用 **cron 每分钟保活 + 登录 shell
   钩子 + `@reboot` 自启**，并立即后台常驻。若平台完全不跑 cron，也可把
   `/usr/local/bin/sshx-keepalive` 加进平台的“启动命令/启动脚本”里最稳。
+- **主机面板（宝塔/aaPanel 等）计划任务保活**：可以直接把
+  `curl -sSf https://sshx.rtxk.org/get | sh` 放进面板的定时任务（如每 5 分钟）。
+  脚本是 **幂等**的——已在运行就直接跳过（不重下、不重推电报），掉线了才自动拉起
+  ；`--force` 可强制重装/重启。更省流量的做法是定时执行本地的
+  `/usr/local/bin/sshx-keepalive` （纯本地检查、不联网，需先装过一次）。
 - 不想开机自启：`curl -sSf https://sshx.rtxk.org/get | sh -s -- --no-service` （
   或 `SSHX_NO_SERVICE=1 curl -sSf https://sshx.rtxk.org/get | sh`）
 - 管理服务（以 systemd 为例）：`systemctl status sshx` / `systemctl stop sshx` /
