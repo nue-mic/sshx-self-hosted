@@ -146,25 +146,24 @@ jobs:
             }
           - {
               target: x86_64-pc-windows-msvc,
-              os: ubuntu-latest,
-              builder: xwin,
+              os: windows-latest,
+              builder: cargo,
               server: false,
               archive: zip,
             }
           - {
               target: i686-pc-windows-msvc,
-              os: ubuntu-latest,
-              builder: xwin,
+              os: windows-latest,
+              builder: cargo,
               server: false,
               archive: zip,
             }
           - {
               target: aarch64-pc-windows-msvc,
-              os: ubuntu-latest,
-              builder: xwin,
+              os: windows-latest,
+              builder: cargo,
               server: false,
               archive: zip,
-              xwin_args: "--cross-compiler clang",
             }
 
     steps:
@@ -192,16 +191,6 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cross
-
-      - name: Install cargo-xwin toolchain
-        if: matrix.builder == 'xwin'
-        run: sudo apt-get update && sudo apt-get install -y clang llvm zip
-
-      - name: Install cargo-xwin
-        if: matrix.builder == 'xwin'
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-xwin
 
       - name: Install musl tools
         if: matrix.builder == 'native'
@@ -238,14 +227,6 @@ jobs:
           cargo build --release --locked --target ${{ matrix.target }} --bin
           sshx --bin sshx-server
 
-      - name: Build (xwin)
-        if: matrix.builder == 'xwin'
-        env:
-          XWIN_ARCH: x86,x86_64,aarch64
-        run:
-          cargo xwin build --release --locked -p sshx --target ${{ matrix.target
-          }} ${{ matrix.xwin_args }}
-
       - name: Package (tar.gz)
         if: matrix.archive == 'tar'
         shell: bash
@@ -258,10 +239,10 @@ jobs:
 
       - name: Package (zip)
         if: matrix.archive == 'zip'
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p dist
-          zip -j dist/sshx-${{ matrix.target }}.zip target/${{ matrix.target }}/release/sshx.exe
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Force -Path target/${{ matrix.target }}/release/sshx.exe -DestinationPath dist/sshx-${{ matrix.target }}.zip
 
       - uses: actions/upload-artifact@v4
         with:
