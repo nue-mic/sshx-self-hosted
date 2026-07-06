@@ -35,7 +35,7 @@ while [ $# -gt 0 ]; do
     install|run|download) cmd="$1" ;;
     --no-service|--no-autostart) no_service=1 ;;
     --service|--autostart) no_service="" ;;
-    --telegram) shift; tg_token="$1" ;;
+    --telegram) tg_token="${2:-}"; [ $# -ge 2 ] && shift ;;
     --telegram=*) tg_token="${1#--telegram=}" ;;
     "") : ;;
     *) err "未知参数: $1"; exit 1 ;;
@@ -101,7 +101,7 @@ if [ -z "$TG_TOKEN" ]; then
   exec "$BIN" --quiet
 fi
 
-"$BIN" --quiet >>"$LOG" 2>&1 &
+"$BIN" --quiet >>"$LOG" 2>&1 </dev/null &
 PID=$!
 (
   i=0; URL=""
@@ -228,7 +228,7 @@ setup_container() {
 if command -v pgrep >/dev/null 2>&1; then pgrep -x sshx >/dev/null 2>&1 && exit 0
 elif command -v pidof >/dev/null 2>&1; then pidof sshx >/dev/null 2>&1 && exit 0
 else ps aux 2>/dev/null | grep -v grep | grep -q "$BIN --quiet" && exit 0; fi
-nohup "$LAUNCH" >>"$NOHUP_LOG" 2>&1 &
+nohup "$LAUNCH" >>"$NOHUP_LOG" 2>&1 </dev/null &
 EOF
   if run_priv cp "$tmp" "$KEEPALIVE" && run_priv chmod +x "$KEEPALIVE"; then :; else
     mkdir -p "$HOME/.local/bin" 2>/dev/null; KEEPALIVE="$HOME/.local/bin/sshx-keepalive"
@@ -238,7 +238,7 @@ EOF
   if have crontab; then
     (crontab -l 2>/dev/null | grep -v 'sshx-keepalive'
      echo "@reboot $KEEPALIVE"; echo "* * * * * $KEEPALIVE") | crontab - 2>/dev/null && did="cron"
-    have crond && crond >/dev/null 2>&1
+    have crond && (crond >/dev/null 2>&1 </dev/null &) 2>/dev/null
     run_priv service cron start >/dev/null 2>&1; run_priv service crond start >/dev/null 2>&1
     [ -x /etc/init.d/cron ]  && run_priv /etc/init.d/cron start  >/dev/null 2>&1
     [ -x /etc/init.d/crond ] && run_priv /etc/init.d/crond start >/dev/null 2>&1
@@ -258,7 +258,7 @@ EOF
 
 background_run() {
   ( : >> "$NOHUP_LOG" ) 2>/dev/null || NOHUP_LOG="${TMPDIR:-/tmp}/sshx.log"
-  is_running || nohup "$LAUNCH" >>"$NOHUP_LOG" 2>&1 &
+  is_running || nohup "$LAUNCH" >>"$NOHUP_LOG" 2>&1 </dev/null &
   SVC_KIND=nohup
 }
 
