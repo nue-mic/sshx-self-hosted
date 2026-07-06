@@ -31,3 +31,16 @@ certificates (e.g. via certbot) at the paths referenced in the file.
 
 `sshx.rtxk.org` is the canonical origin (matches `--override-origin`);
 `sshx.rtxk.us` is a mirror that reaches the same backend.
+
+## 反向代理与 Cloudflare（重要）
+
+sshx 客户端通过 **gRPC（HTTP/2，且是双向流）** 连接服务端，所以前置代理必须支持
+HTTP/2 + gRPC 透传：
+
+- 自建 Caddy/nginx（本目录的配置）都已正确处理 gRPC，直接用即可。
+- 若域名套了 **Cloudflare 橙云代理**，gRPC 请求常被返回 `403`（客户端会报
+  `invalid compression flag: 60 ... 403 Forbidden`），且 Cloudflare 对双向流式
+  gRPC 支持不佳。**推荐把 sshx 的域名在 Cloudflare 里设为「DNS only」（灰云
+  ）**，让客户端直连源站（Caddy/nginx 直接处理 gRPC + 自动签发证书）。若必须走橙
+  云：关闭 Bot Fight Mode、为该域名加 WAF 放行、并在 Network 里开启 gRPC——但仍不
+  保证稳定。
