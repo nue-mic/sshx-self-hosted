@@ -171,35 +171,35 @@
       <p class="mt-8 mb-3">Or, download the binary for your platform.</p>
       <div class="flex flex-wrap gap-2 mb-2">
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-aarch64-apple-darwin.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-aarch64-apple-darwin.tar.gz"
           >macOS ARM64 (Apple Silicon)</DownloadLink
         >
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-x86_64-apple-darwin.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-x86_64-apple-darwin.tar.gz"
           >macOS x86-64 (Intel)</DownloadLink
         >
       </div>
       <div class="flex flex-wrap gap-2 mb-2">
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-aarch64-unknown-linux-musl.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-aarch64-unknown-linux-musl.tar.gz"
           >Linux ARM64</DownloadLink
         >
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-x86_64-unknown-linux-musl.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-x86_64-unknown-linux-musl.tar.gz"
           >Linux x86-64</DownloadLink
         >
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-arm-unknown-linux-musleabihf.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-arm-unknown-linux-musleabihf.tar.gz"
           >Linux ARMv6</DownloadLink
         >
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-armv7-unknown-linux-musleabihf.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-armv7-unknown-linux-musleabihf.tar.gz"
           >Linux ARMv7</DownloadLink
         >
       </div>
       <div class="flex flex-wrap gap-2">
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-x86_64-unknown-freebsd.tar.gz"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-x86_64-unknown-freebsd.tar.gz"
           >FreeBSD x86-64</DownloadLink
         >
       </div>
@@ -216,15 +216,15 @@
 
       <div class="flex flex-wrap gap-2">
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-x86_64-pc-windows-msvc.zip"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-x86_64-pc-windows-msvc.zip"
           >Windows x86-64</DownloadLink
         >
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-i686-pc-windows-msvc.zip"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-i686-pc-windows-msvc.zip"
           >Windows x86</DownloadLink
         >
         <DownloadLink
-          href="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-aarch64-pc-windows-msvc.zip"
+          href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-aarch64-pc-windows-msvc.zip"
           >Windows ARM64</DownloadLink
         >
       </div>

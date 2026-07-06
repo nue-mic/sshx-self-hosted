@@ -52,7 +52,7 @@ the public URL from hijacking the ID.
 ## Installation
 
 Install the `sshx` client with a single command. It downloads the right binary
-for your platform from this repo's GitHub Releases:
+for your platform through the release proxy (key `sshx-self-releases`):
 
 ```shell
 curl -sSf https://sshx.rtxk.org/get | sh
@@ -61,8 +61,8 @@ curl -sSf https://sshx.rtxk.org/get | sh
 Use `sh -s run` to run it once without installing, or `sh -s download` to drop
 the binary in the current directory. Prebuilt binaries for macOS, Linux,
 Windows, and FreeBSD are also on the
-[releases page](https://github.com/nue-mic/sshx-self-hosted/releases/latest) and
-linked from the landing page at https://sshx.rtxk.org.
+[releases page](https://github.com/nue-mic/sshx-self-hosted/releases) and linked
+from the landing page at https://sshx.rtxk.org.
 
 Or build from source with [Rust](https://rust-lang.com/) installed:
 
@@ -83,10 +83,15 @@ On every push to `main`, CI (`.github/workflows/ci.yaml`) builds and publishes:
 
 - A **container image** for the server on the GitHub Container Registry:
   `ghcr.io/nue-mic/sshx-self-hosted:latest` (also tagged with the commit SHA).
-- **Binaries** for `sshx` (client) and `sshx-server`, attached to a rolling
-  [`latest` release](https://github.com/nue-mic/sshx-self-hosted/releases/latest)
-  for macOS, Linux (musl), Windows, and FreeBSD. The `/get` script and the
-  landing page download buttons pull from this release.
+- **Binaries** for `sshx` (client) and `sshx-server`, published as an
+  incrementing versioned
+  [GitHub release](https://github.com/nue-mic/sshx-self-hosted/releases)
+  (`v{version}-{build}`) on every push, for macOS, Linux (musl), Windows, and
+  FreeBSD. The `/get` script and the landing-page download buttons fetch them
+  through the release proxy at
+  `https://mirrors.rtxk.us/sshx-self-releases/latest/<file>` (key
+  `sshx-self-releases`), whose `latest` resolves to the newest versioned
+  release. No direct GitHub download or token is needed by clients.
 
 The `sshx-server` binary also serves the web frontend, so once it runs at your
 domain you automatically get the landing page and the `/get` install script

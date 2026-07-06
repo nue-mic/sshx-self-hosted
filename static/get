@@ -29,7 +29,7 @@ case "$(uname -m)" in
   *) echo "Unsupported arch $(uname -m)"; exit 1;;
 esac
 
-url="https://github.com/nue-mic/sshx-self-hosted/releases/latest/download/sshx-${arch}${suffix}.tar.gz"
+url="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-${arch}${suffix}.tar.gz"
 
 if [ -z "$NO_COLOR" ]; then
   ansi_reset="\033[0m"

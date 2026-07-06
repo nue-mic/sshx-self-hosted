@@ -270,7 +270,7 @@ jobs:
           if-no-files-found: error
 
   release:
-    name: Publish latest release
+    name: Publish versioned release
     runs-on: ubuntu-latest
     # Run even if some build targets fail, so one flaky platform does not block
     # publishing the rest.
@@ -284,6 +284,8 @@ jobs:
       cancel-in-progress: true
 
     steps:
+      - uses: actions/checkout@v4
+
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -296,15 +298,21 @@ jobs:
           sha256sum * > SHA256SUMS.txt
           ls -la
 
-      - name: Publish rolling "latest" release
+      - name: Determine version tag
+        id: ver
+        run: |
+          V=$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "tag=v${V}-${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish versioned release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: Latest build
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: ${{ steps.ver.outputs.tag }}
           body: |
-            Rolling build of the latest `main`. Binaries for `sshx` (client) and
-            `sshx-server` are attached, used by the `/get` install script and the
-            download page.
+            Automated build ${{ steps.ver.outputs.tag }} from ${{ github.sha }}.
+            Binaries for `sshx` (client) and `sshx-server`, served via the release
+            proxy under key `sshx-self-releases`.
           prerelease: false
           make_latest: true
           files: dist/*
