@@ -259,6 +259,26 @@
     </div>
   </section>
 
+  <section class="installation-section">
+    <h3 class="text-xl sm:text-lg">
+      <HardDriveIcon size="20" class="text-zinc-400 inline-block mr-1 mb-0.5" />
+      Server (auto-start on boot)
+    </h3>
+    <div class="text-sm text-zinc-400 md:text-base md:pt-0.5">
+      <p class="mb-3">
+        On a Linux server or VPS, this one command installs sshx, enables it as
+        a boot service (systemd / OpenRC / SysV), starts it in the background,
+        and prints this machine's fixed access URL. It keeps running after you
+        close the terminal and across reboots.
+      </p>
+      <CopyableCode value="curl -sSf https://sshx.rtxk.org/get | sh" />
+      <p class="mt-3">
+        Append <span class="whitespace-nowrap">-s -- --no-service</span> to install
+        the binary only, without the boot service.
+      </p>
+    </div>
+  </section>
+
   <hr class="mt-32 mb-12" />
 
   <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-6">

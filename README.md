@@ -60,10 +60,11 @@ curl -sSf https://sshx.rtxk.org/get | sh
 - 想直接运行、不安装：`curl -sSf https://sshx.rtxk.org/get | sh -s run`
 - 只下载到当前目录：`curl -sSf https://sshx.rtxk.org/get | sh -s download`
 
-在 **Linux** 上，`install`（默认）还会自动把 sshx 配置成**开机自启服务**（自动识
-别 systemd / OpenRC / SysV，兼容各类 VPS/虚拟主机），机器重启后会在固定 URL 上持
-续可访问。配置自启需要 root（会自动用 sudo），**失败只提示、不影响 sshx 安装本
-身**。
+在 **Linux** 上，`install`（默认）会一条龙完成：自动配置**开机自启服务**（识别
+systemd / OpenRC / SysV，兼容各类 VPS/虚拟主机）、**立即在后台常驻启动**（关掉控
+制台/断开 SSH 也不停）、并**打印本机的固定连接地址**。机器重启后仍在同一 URL 可
+访问。配置自启需要 root（会自动用 sudo）；**失败只提示、绝不影响 sshx 安装本
+身**（会退化为本次后台运行）。
 
 - 不想开机自启：`curl -sSf https://sshx.rtxk.org/get | sh -s -- --no-service` （
   或 `SSHX_NO_SERVICE=1 curl -sSf https://sshx.rtxk.org/get | sh`）
