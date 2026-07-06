@@ -236,7 +236,10 @@ jobs:
   release:
     name: Publish latest release
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Run even if some build targets fail, so one flaky platform does not block
+    # publishing the rest.
+    if:
+      always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [build]
     permissions:
       contents: write
