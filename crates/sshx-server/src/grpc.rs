@@ -48,20 +48,46 @@ impl SshxService for GrpcServer {
         if origin.is_empty() {
             return Err(Status::invalid_argument("origin is empty"));
         }
-        let name = rand_alphanumeric(10);
-        info!(%name, "creating new session");
 
-        match self.0.lookup(&name) {
-            Some(_) => return Err(Status::already_exists("generated duplicate ID")),
-            None => {
-                let metadata = Metadata {
-                    encrypted_zeros: request.encrypted_zeros,
-                    name: request.name,
-                    write_password_hash: request.write_password_hash,
-                };
-                self.0.insert(&name, Arc::new(Session::new(metadata)));
+        // The client may request a specific, fixed session ID (derived from its
+        // stable machine identity) so that its URL survives restarts. An empty
+        // `session_id` preserves the original behavior of a random session ID.
+        let name = if request.session_id.is_empty() {
+            let name = rand_alphanumeric(10);
+            if self.0.lookup(&name).is_some() {
+                return Err(Status::already_exists("generated duplicate ID"));
             }
+            info!(%name, "creating new session");
+            name
+        } else {
+            let name = request.session_id.clone();
+            validate_session_id(&name)?;
+            if let Some(existing) = self.0.lookup(&name) {
+                // A session with this fixed ID already exists (typically the
+                // same machine reconnecting after a restart). Only allow taking
+                // it over if the caller proves ownership by presenting the same
+                // encryption key, i.e. an identical encrypted-zeros block. This
+                // stops anyone who merely knows the public URL from hijacking
+                // the ID. The previous session is then shut down by `insert`.
+                if existing.metadata().encrypted_zeros != request.encrypted_zeros {
+                    return Err(Status::permission_denied(
+                        "session ID already in use with a different encryption key",
+                    ));
+                }
+                info!(%name, "reclaiming existing fixed session");
+            } else {
+                info!(%name, "creating new fixed session");
+            }
+            name
         };
+
+        let metadata = Metadata {
+            encrypted_zeros: request.encrypted_zeros,
+            name: request.name,
+            write_password_hash: request.write_password_hash,
+        };
+        self.0.insert(&name, Arc::new(Session::new(metadata)));
+
         let token = self.0.mac().chain_update(&name).finalize();
         let url = format!("{origin}/s/{name}");
         Ok(Response::new(OpenResponse {
@@ -130,6 +156,21 @@ fn validate_token(mac: impl Mac, name: &str, token: &str) -> tonic::Result<()> {
         }
     }
     Err(Status::unauthenticated("invalid token"))
+}
+
+/// Validate a client-requested fixed session ID.
+///
+/// Session IDs appear directly in URLs and are used as storage keys, so they
+/// are restricted to a safe, bounded alphanumeric form.
+#[allow(clippy::result_large_err)]
+fn validate_session_id(id: &str) -> tonic::Result<()> {
+    const MAX_LEN: usize = 64;
+    if id.is_empty() || id.len() > MAX_LEN || !id.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err(Status::invalid_argument(
+            "session_id must be 1-64 ASCII alphanumeric characters",
+        ));
+    }
+    Ok(())
 }
 
 type ServerTx = mpsc::Sender<Result<ServerUpdate, Status>>;

@@ -1,4 +1,4 @@
-# sshx
+# sshx (self-hosted fork)
 
 A secure web-based, collaborative terminal.
 
@@ -14,83 +14,104 @@ A secure web-based, collaborative terminal.
 - Automatic reconnection and real-time latency estimates.
 - Predictive echo for faster local editing (à la Mosh).
 
-Visit [sshx.io](https://sshx.io) to learn more.
+This is a self-hosting fork of [sshx](https://github.com/ekzhang/sshx). It adds
+**fixed, per-machine URLs** and an **automated build pipeline** that publishes
+static binaries and a container image to GitHub. Everything else works exactly
+like upstream; visit [sshx.io](https://sshx.io) to learn about the base project.
+
+## Fixed per-machine URLs
+
+Upstream sshx asks the server for a brand-new random session ID every time the
+client starts, so the shareable URL changes on every restart. This fork makes
+the URL **stable per machine** by default: the session ID and the end-to-end
+encryption key are derived deterministically from a stable machine fingerprint,
+so the same machine always produces the same URL.
+
+- **Default:** the fingerprint comes from the network card MAC address, falling
+  back to the system machine-id and then the hostname.
+- `--ephemeral`: use a one-off random session instead (the original behavior).
+- `--machine-seed <value>` / `SSHX_MACHINE_SEED=<value>`: override the
+  fingerprint with any stable string. Useful to pin the identity explicitly,
+  keep it stable across hardware changes, or run several distinct fixed sessions
+  on one machine.
+
+The derivation is a pure function of the fingerprint. Nothing about the machine
+identity is sent to the server beyond the chosen session ID (exactly like the
+random flow), and the encryption key never leaves the client.
+
+On the server side, if a client opens a session whose fixed ID already exists,
+the server only lets it reclaim that ID when the client presents the same
+encryption key (verified via the encrypted-zeros block). This lets a machine
+reclaim its own URL after a restart, while preventing anyone who merely knows
+the public URL from hijacking the ID.
+
+> Because the URL is fixed per machine, running `sshx` twice on the same machine
+> makes the second invocation take over the first one's URL. Use a distinct
+> `--machine-seed`, or `--ephemeral`, for a second concurrent session.
 
 ## Installation
 
-Just run this command to get the `sshx` binary for your platform.
-
-```shell
-curl -sSf https://sshx.io/get | sh
-```
-
-Supports Linux and MacOS on x86_64 and ARM64 architectures, as well as embedded
-ARMv6 and ARMv7-A systems. The Linux binaries are statically linked.
-
-For Windows, there are binaries for x86_64, x86, and ARM64, linked to MSVC for
-maximum compatibility.
-
-If you just want to try it out without installing, use:
-
-```shell
-curl -sSf https://sshx.io/get | sh -s run
-```
-
-Inspect the script for additional options.
-
-You can also install it with [Homebrew](https://brew.sh/) on macOS.
-
-```shell
-brew install sshx
-```
-
-### CI/CD
-
-You can run sshx in continuous integration workflows to help debug tricky
-issues, like in GitHub Actions.
-
-```yaml
-name: CI
-on: push
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      # ... other steps ...
-
-      - run: curl -sSf https://sshx.io/get | sh -s run
-      #      ^
-      #      └ This will open a remote terminal session and print the URL. It
-      #        should take under a second.
-```
-
-We don't have a prepackaged action because it's just a single command. It works
-anywhere: GitLab CI, CircleCI, Buildkite, CI on your Raspberry Pi, etc.
-
-Be careful adding this to a public GitHub repository, as any user can view the
-logs of a CI job while it is running.
-
-## Development
-
-Here's how to work on the project, if you want to contribute.
-
-### Building from source
-
-To build the latest version of the client from source, clone this repository and
-run, with [Rust](https://rust-lang.com/) installed:
+Build the client from source with [Rust](https://rust-lang.com/) installed:
 
 ```shell
 cargo install --path crates/sshx
 ```
 
-This will compile the `sshx` binary and place it in your `~/.cargo/bin` folder.
+This compiles the `sshx` binary into your `~/.cargo/bin` folder. Prebuilt static
+binaries are also produced by CI (see [Self-hosting](#self-hosting)).
 
-### Workflow
+Point the client at your own server and start a session:
 
-First, start service containers for development.
+```shell
+sshx --server https://sshx.example.com
+# equivalently: SSHX_SERVER=https://sshx.example.com sshx
+```
+
+## Self-hosting
+
+On every push to `main`, CI (`.github/workflows/ci.yaml`) builds and publishes:
+
+- A **container image** for the server on the GitHub Container Registry:
+  `ghcr.io/nue-mic/sshx-self-hosted:latest` (also tagged with the commit SHA).
+- **Static binaries** (`sshx` and `sshx-server`) for `x86_64-unknown-linux-musl`
+  and `aarch64-unknown-linux-musl`, uploaded as workflow build artifacts.
+
+### Run the server with Docker
+
+```shell
+docker run -d --name sshx-server -p 8051:8051 \
+  -e SSHX_SECRET="$(openssl rand -hex 32)" \
+  ghcr.io/nue-mic/sshx-self-hosted:latest \
+  ./sshx-server --listen :: --override-origin https://sshx.example.com
+```
+
+Notes:
+
+- **Set a fixed `SSHX_SECRET`.** The server signs session tokens with it, so a
+  stable secret keeps tokens (and therefore fixed URLs) valid across server
+  restarts. If you omit it, the server generates a random secret on each start.
+- `--override-origin` is the public base URL clients should be given; it must
+  match how users reach the server.
+- Put a **TLS-terminating reverse proxy** in front that supports HTTP/2 and gRPC
+  — the client talks gRPC to the server, so plain HTTP/1.1 proxies are not
+  enough.
+- Redis is optional and only needed to run a multi-server mesh; a single server
+  runs fine without it (add `--redis-url` / `SSHX_REDIS_URL` to enable it).
+
+### Server options
+
+```
+--port <PORT>              Port to listen on (default 8051)
+--listen <IP>              Interface to listen on (default ::1; use :: in Docker)
+--secret <SECRET>          Token-signing secret (env SSHX_SECRET) — set a fixed value
+--override-origin <URL>    Public origin returned in session URLs
+--redis-url <URL>          Redis URL for multi-server mesh (env SSHX_REDIS_URL)
+--host <HOST>              This server's mesh host address
+```
+
+## Development
+
+First, start service containers for development:
 
 ```shell
 docker compose up -d
@@ -105,17 +126,8 @@ npm install
 mprocs
 ```
 
-This will compile and start the server, an instance of the client, and the web
+This compiles and starts the server, an instance of the client, and the web
 frontend in parallel on your machine.
 
-## Deployment
-
-I host the application servers on [Fly.io](https://fly.io/) and with
-[Redis Cloud](https://redis.com/).
-
-Self-hosted deployments are not supported at the moment. If you want to deploy
-sshx, you'll need to properly implement HTTP/TCP reverse proxies, gRPC
-forwarding, TLS termination, private mesh networking, and graceful shutdown.
-
-Please do not run the development commands in a public setting, as this is
-insecure.
+Please do not run the development commands in a public setting, as they are not
+hardened for untrusted access.

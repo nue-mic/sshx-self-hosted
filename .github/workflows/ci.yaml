@@ -71,20 +71,89 @@ jobs:
 
       - run: npm run build
 
-  deploy:
-    name: Deploy
+  binaries:
+    name: Build static binaries (${{ matrix.target }})
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [rustfmt, rust, web]
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: rustup toolchain install stable --profile minimal
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build sshx and sshx-server
+        run:
+          cross build --release --locked --target ${{ matrix.target }} --bin
+          sshx --bin sshx-server
+
+      - name: Package binaries
+        run: |
+          mkdir -p dist
+          tar --no-xattrs -C target/${{ matrix.target }}/release -czf dist/sshx-${{ matrix.target }}.tar.gz sshx
+          tar --no-xattrs -C target/${{ matrix.target }}/release -czf dist/sshx-server-${{ matrix.target }}.tar.gz sshx-server
+          (cd dist && sha256sum *.tar.gz > sshx-${{ matrix.target }}.sha256)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sshx-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  docker:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [rustfmt, rust, web]
+    permissions:
+      contents: read
+      packages: write
     concurrency:
-      group: deploy
+      group: docker
       cancel-in-progress: true
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: superfly/flyctl-actions/setup-flyctl@v1
+      - uses: docker/setup-buildx-action@v3
 
-      - run: flyctl deploy
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha,format=long
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

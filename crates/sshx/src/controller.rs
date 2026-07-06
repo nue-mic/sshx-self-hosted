@@ -17,6 +17,7 @@ use tonic::transport::Channel;
 use tracing::{debug, error, warn};
 
 use crate::encrypt::Encrypt;
+use crate::machine::StableIdentity;
 use crate::runner::{Runner, ShellData};
 
 /// Interval for sending empty heartbeat messages to the server.
@@ -47,14 +48,30 @@ pub struct Controller {
 
 impl Controller {
     /// Construct a new controller, connecting to the remote server.
+    ///
+    /// If `identity` is `Some`, the encryption key, optional write password,
+    /// and requested session ID are derived deterministically from the stable
+    /// machine identity, so the resulting URL is fixed across restarts. If it
+    /// is `None`, all of these are freshly random (the original ephemeral
+    /// behavior) and the server assigns a random session ID.
     pub async fn new(
         origin: &str,
         name: &str,
         runner: Runner,
         enable_readers: bool,
+        identity: Option<StableIdentity>,
     ) -> Result<Self> {
         debug!(%origin, "connecting to server");
-        let encryption_key = rand_alphanumeric(14); // 83.3 bits of entropy
+
+        let encryption_key = match &identity {
+            Some(id) => id.encryption_key.clone(),
+            None => rand_alphanumeric(14), // 83.3 bits of entropy
+        };
+        // Empty string tells the server to assign a random session ID.
+        let session_id = identity
+            .as_ref()
+            .map(|id| id.session_id.clone())
+            .unwrap_or_default();
 
         let kdf_task = {
             let encryption_key = encryption_key.clone();
@@ -62,7 +79,10 @@ impl Controller {
         };
 
         let (write_password, kdf_write_password_task) = if enable_readers {
-            let write_password = rand_alphanumeric(14); // 83.3 bits of entropy
+            let write_password = match &identity {
+                Some(id) => id.write_password.clone(),
+                None => rand_alphanumeric(14), // 83.3 bits of entropy
+            };
             let task = {
                 let write_password = write_password.clone();
                 task::spawn_blocking(move || Encrypt::new(&write_password))
@@ -85,6 +105,7 @@ impl Controller {
             encrypted_zeros: encrypt.zeros().into(),
             name: name.into(),
             write_password_hash,
+            session_id,
         };
         let mut resp = client.open(req).await?.into_inner();
         resp.url = resp.url + "#" + &encryption_key;

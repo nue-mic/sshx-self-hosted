@@ -3,7 +3,9 @@ use std::process::ExitCode;
 use ansi_term::Color::{Cyan, Fixed, Green};
 use anyhow::Result;
 use clap::Parser;
-use sshx::{controller::Controller, runner::Runner, terminal::get_default_shell};
+use sshx::{
+    controller::Controller, machine::StableIdentity, runner::Runner, terminal::get_default_shell,
+};
 use tokio::signal;
 use tracing::error;
 
@@ -31,9 +33,26 @@ struct Args {
     /// editors.
     #[clap(long)]
     enable_readers: bool,
+
+    /// Use a one-off random session instead of this machine's fixed URL.
+    ///
+    /// By default, sshx derives a stable session ID and encryption key from the
+    /// machine's fingerprint (MAC address, with machine-id/hostname fallbacks),
+    /// so the shareable URL stays the same across restarts. Pass this flag to
+    /// get a fresh random URL instead (the original behavior).
+    #[clap(long)]
+    ephemeral: bool,
+
+    /// Override the fingerprint used to derive this machine's fixed URL.
+    ///
+    /// Any stable string works. Useful to pin the identity explicitly, keep it
+    /// consistent across hardware changes, or run several distinct fixed
+    /// sessions on one machine. Ignored when `--ephemeral` is set.
+    #[clap(long, env = "SSHX_MACHINE_SEED")]
+    machine_seed: Option<String>,
 }
 
-fn print_greeting(shell: &str, controller: &Controller) {
+fn print_greeting(shell: &str, controller: &Controller, stable_source: Option<&str>) {
     let version_str = match option_env!("CARGO_PKG_VERSION") {
         Some(version) => format!("v{version}"),
         None => String::from("[dev]"),
@@ -69,6 +88,13 @@ fn print_greeting(shell: &str, controller: &Controller) {
             shell_v = Fixed(8).paint(shell),
         );
     }
+    if let Some(source) = stable_source {
+        println!(
+            "  {arr}  This machine's URL is fixed across restarts (from {source}).\n     Pass \
+             --ephemeral for a one-off random session.\n",
+            arr = Green.paint("➜"),
+        );
+    }
 }
 
 #[tokio::main]
@@ -89,8 +115,19 @@ async fn start(args: Args) -> Result<()> {
         name
     });
 
+    // Resolve the stable per-machine identity unless a one-off session was
+    // requested. This derives a fixed session ID and encryption key so the URL
+    // is identical on every restart of this machine.
+    let identity = if args.ephemeral {
+        None
+    } else {
+        Some(StableIdentity::resolve(args.machine_seed.as_deref())?)
+    };
+    let stable_source = identity.as_ref().map(|id| id.source.clone());
+
     let runner = Runner::Shell(shell.clone());
-    let mut controller = Controller::new(&args.server, &name, runner, args.enable_readers).await?;
+    let mut controller =
+        Controller::new(&args.server, &name, runner, args.enable_readers, identity).await?;
     if args.quiet {
         if let Some(write_url) = controller.write_url() {
             println!("{}", write_url);
@@ -98,7 +135,7 @@ async fn start(args: Args) -> Result<()> {
             println!("{}", controller.url());
         }
     } else {
-        print_greeting(&shell, &controller);
+        print_greeting(&shell, &controller, stable_source.as_deref());
     }
 
     let exit_signal = signal::ctrl_c();
