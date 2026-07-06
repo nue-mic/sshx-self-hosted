@@ -118,6 +118,7 @@ jobs:
               builder: cross,
               server: true,
               archive: tar,
+              protoc_host: true,
             }
           - {
               target: aarch64-apple-darwin,
@@ -192,8 +193,24 @@ jobs:
         with:
           tool: cargo-xwin
 
-      - name: Build (cross)
-        if: matrix.builder == 'cross'
+      - name: Fetch protoc for host-provided cross build
+        if: matrix.protoc_host
+        run: |
+          mkdir -p .protoc
+          curl -sSL -o /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip
+          unzip -o /tmp/protoc.zip -d .protoc
+          chmod +x .protoc/bin/protoc
+
+      - name: Build (cross, image protoc)
+        if: matrix.builder == 'cross' && !matrix.protoc_host
+        run:
+          cross build --release --locked --target ${{ matrix.target }} --bin
+          sshx ${{ matrix.server && '--bin sshx-server' || '' }}
+
+      - name: Build (cross, host protoc)
+        if: matrix.builder == 'cross' && matrix.protoc_host
+        env:
+          PROTOC: /project/.protoc/bin/protoc
         run:
           cross build --release --locked --target ${{ matrix.target }} --bin
           sshx ${{ matrix.server && '--bin sshx-server' || '' }}
