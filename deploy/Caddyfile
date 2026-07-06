@@ -1,0 +1,9 @@
+# Both domains serve the same self-hosted sshx instance. sshx.rtxk.org is the
+# canonical origin (it matches --override-origin in docker-compose.yml);
+# sshx.rtxk.us is a mirror that reaches the same backend.
+#
+# `h2c://` forwards HTTP/2 cleartext to the server, which is required for the
+# gRPC traffic from the `sshx` command-line client.
+sshx.rtxk.org, sshx.rtxk.us {
+	reverse_proxy h2c://sshx-server:8051
+}

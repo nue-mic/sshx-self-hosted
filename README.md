@@ -75,6 +75,10 @@ The client connects to `https://sshx.rtxk.org` by default; override it with
 
 ## Self-hosting
 
+Ready-to-use deployment configs live in [`deploy/`](deploy/): a Docker Compose
+file with automatic HTTPS via Caddy, and a standalone nginx config. See
+[`deploy/README.md`](deploy/README.md) for the quick start.
+
 On every push to `main`, CI (`.github/workflows/ci.yaml`) builds and publishes:
 
 - A **container image** for the server on the GitHub Container Registry:

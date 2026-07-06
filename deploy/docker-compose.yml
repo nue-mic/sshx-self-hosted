@@ -1,0 +1,48 @@
+# Ready-to-use self-hosted sshx deployment (server + automatic HTTPS proxy).
+#
+# Quick start:
+#   1. Point DNS A/AAAA records for sshx.rtxk.org (and optionally sshx.rtxk.us)
+#      at this host's public IP.
+#   2. Create a .env file next to this file with a fixed secret:
+#        echo "SSHX_SECRET=$(openssl rand -hex 32)" > .env
+#   3. Launch:
+#        docker compose -f deploy/docker-compose.yml up -d
+#
+# Caddy automatically obtains and renews HTTPS certificates and reverse-proxies
+# to the server over HTTP/2 cleartext (h2c), which is what sshx's gRPC needs, so
+# there is nothing else to configure. Open https://sshx.rtxk.org to confirm.
+
+services:
+  sshx-server:
+    image: ghcr.io/nue-mic/sshx-self-hosted:latest
+    restart: unless-stopped
+    command:
+      - ./sshx-server
+      - --listen
+      - "::"
+      - --override-origin
+      - https://sshx.rtxk.org
+    environment:
+      # A stable secret keeps session tokens and fixed per-machine URLs valid
+      # across server restarts. Set it in a .env file (see the header). Required.
+      SSHX_SECRET:
+        ${SSHX_SECRET:?set SSHX_SECRET in a .env file next to this compose file}
+    expose:
+      - "8051"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - sshx-server
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
