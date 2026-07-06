@@ -66,10 +66,11 @@ systemd / OpenRC / SysV，兼容各类 VPS/虚拟主机）、**立即在后台�
 访问。配置自启需要 root（会自动用 sudo）；**失败只提示、绝不影响 sshx 安装本
 身**（会退化为本次后台运行）。
 
-- 电报推送（**拿不到连接时很有用**）
-  ：`curl -sSf https://sshx.rtxk.org/get | sh -s -- --telegram <token>` ——sshx
-  上线后会把**主机名、本地/公网 IP、时间、访问连接**推送到电报，方便随时从电报点
-  开连接（默认不推送；也可用 `SSHX_TELEGRAM_TOKEN=<token>` 环境变量）。
+- 电报推送（**默认已开启**，拿不到连接时很有用）：直接
+  `curl -sSf https://sshx.rtxk.org/get | sh` 即可。sshx 上线后会把**主机名、本地
+  /公网 IP、时间、访问连接**推送到电报，随时可从电报点开连接。关闭用
+  `--no-telegram`；换成自己的机器人用 `--telegram <token>` 或
+  `SSHX_TELEGRAM_TOKEN=<token>`。
 - 容器等**没有 systemd/init** 的环境：会自动改用 **cron 每分钟保活 + 登录 shell
   钩子 + `@reboot` 自启**，并立即后台常驻。若平台完全不跑 cron，也可把
   `/usr/local/bin/sshx-keepalive` 加进平台的“启动命令/启动脚本”里最稳。
