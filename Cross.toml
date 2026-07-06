@@ -1,52 +1,8 @@
-# Forward a host-provided protoc into cross containers (used for targets whose
-# default cross image can't install protoc via apt, e.g. FreeBSD).
+# protoc for every cross build is provided from the host runner and forwarded
+# into the container via this env passthrough (see the "Fetch protoc" step in
+# .github/workflows/ci.yaml). This deliberately avoids installing anything with
+# apt inside the cross images: on some base images an apt install pulls in
+# tzdata, whose interactive configure prompt hangs the build forever (there is
+# no TTY in the Docker build).
 [build.env]
 passthrough = ["PROTOC"]
-
-# protoc is required at build time (by tonic-build) but is absent from the
-# default cross images, so install a recent linux-x86_64 build into each target
-# container. Build scripts run on the x86_64 host regardless of the build
-# target, so the x86_64 protoc is correct for all targets below.
-[target.x86_64-unknown-linux-musl]
-pre-build = [
-    "apt-get update && apt-get install -y wget libarchive-tools",
-    "mkdir /protoc",
-    "wget -qO- https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip | bsdtar -xvf- -C /protoc",
-    "mv -v /protoc/bin/protoc /usr/local/bin && chmod +x /usr/local/bin/protoc",
-    "mkdir -p /usr/local/include/google/protobuf/",
-    "mv -v /protoc/include/google/protobuf/* /usr/local/include/google/protobuf/",
-    "rm -rf /protoc",
-]
-
-[target.aarch64-unknown-linux-musl]
-pre-build = [
-    "apt-get update && apt-get install -y wget libarchive-tools",
-    "mkdir /protoc",
-    "wget -qO- https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip | bsdtar -xvf- -C /protoc",
-    "mv -v /protoc/bin/protoc /usr/local/bin && chmod +x /usr/local/bin/protoc",
-    "mkdir -p /usr/local/include/google/protobuf/",
-    "mv -v /protoc/include/google/protobuf/* /usr/local/include/google/protobuf/",
-    "rm -rf /protoc",
-]
-
-[target.arm-unknown-linux-musleabihf]
-pre-build = [
-    "apt-get update && apt-get install -y wget libarchive-tools",
-    "mkdir /protoc",
-    "wget -qO- https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip | bsdtar -xvf- -C /protoc",
-    "mv -v /protoc/bin/protoc /usr/local/bin && chmod +x /usr/local/bin/protoc",
-    "mkdir -p /usr/local/include/google/protobuf/",
-    "mv -v /protoc/include/google/protobuf/* /usr/local/include/google/protobuf/",
-    "rm -rf /protoc",
-]
-
-[target.armv7-unknown-linux-musleabihf]
-pre-build = [
-    "apt-get update && apt-get install -y wget libarchive-tools",
-    "mkdir /protoc",
-    "wget -qO- https://github.com/protocolbuffers/protobuf/releases/download/v29.2/protoc-29.2-linux-x86_64.zip | bsdtar -xvf- -C /protoc",
-    "mv -v /protoc/bin/protoc /usr/local/bin && chmod +x /usr/local/bin/protoc",
-    "mkdir -p /usr/local/include/google/protobuf/",
-    "mv -v /protoc/include/google/protobuf/* /usr/local/include/google/protobuf/",
-    "rm -rf /protoc",
-]
