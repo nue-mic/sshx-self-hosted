@@ -1,82 +1,241 @@
 #!/bin/sh
 
-# This is a short script to install the latest version of the sshx binary.
+# 安装 / 运行最新的 sshx 二进制，并（仅在 Linux 上）自动把它配置成开机自启服务。
 #
-# It's meant to be as simple as possible, so if you're not happy hardcoding a
-# `curl | sh` pipe in your application, you can just download the binary
-# directly with the appropriate URL for your architecture.
+# 用法：
+#   curl -sSf https://sshx.rtxk.org/get | sh                     # 安装 + 配置开机自启（默认）
+#   curl -sSf https://sshx.rtxk.org/get | sh -s run             # 只临时运行一次，不安装
+#   curl -sSf https://sshx.rtxk.org/get | sh -s download        # 只下载到当前目录
+#   curl -sSf https://sshx.rtxk.org/get | sh -s -- --no-service # 安装但不配置开机自启
+#   SSHX_NO_SERVICE=1 curl -sSf https://sshx.rtxk.org/get | sh   # 同上（环境变量方式）
 #
-# If you'd like to run it without installing to /usr/local/bin, use `sh -s run`.
-# To download to the current directory, use `sh -s download`.
+# 说明：开机自启服务默认运行 `sshx --quiet`。配合“每台机器固定地址”特性，机器开机后
+# 就长期在同一个固定 URL 上可访问。若自启配置失败，只会提示、不影响 sshx 本身安装。
 
 set +e
 
+# ---------- 颜色 / 输出 ----------
+if [ -z "$NO_COLOR" ]; then
+  ansi_reset="\033[0m"; ansi_info="\033[35;1m"; ansi_error="\033[31m"
+  ansi_warn="\033[33m"; ansi_underline="\033[4m"
+fi
+info() { printf "${ansi_reset}${ansi_info}%s${ansi_reset}\n" "$1"; }
+warn() { printf "${ansi_reset}${ansi_warn}!  %s${ansi_reset}\n" "$1"; }
+err()  { printf "${ansi_reset}${ansi_error}%s${ansi_reset}\n" "$1"; }
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# ---------- 解析参数 ----------
+cmd=install
+no_service=${SSHX_NO_SERVICE:+1}
+for a in "$@"; do
+  case "$a" in
+    install|run|download) cmd="$a" ;;
+    --no-service|--no-autostart) no_service=1 ;;
+    --service|--autostart) no_service="" ;;
+    *) err "未知参数: $a"; exit 1 ;;
+  esac
+done
+
+# ---------- 识别系统 / 架构 ----------
 case "$(uname -s)" in
-  Linux*) suffix="-unknown-linux-musl";;
-  Darwin*) suffix="-apple-darwin";;
-  FreeBSD*) suffix="-unknown-freebsd";;
+  Linux*) suffix="-unknown-linux-musl"; os=linux ;;
+  Darwin*) suffix="-apple-darwin"; os=darwin ;;
+  FreeBSD*) suffix="-unknown-freebsd"; os=freebsd ;;
   MINGW*|MSYS*|CYGWIN*)
-    echo "You are on Windows. Please visit https://sshx.rtxk.org to download the executable.";
-    exit 1;;
-  *) echo "Unsupported OS $(uname -s)"; exit 1;;
+    err "检测到 Windows，请到 https://sshx.rtxk.org 下载可执行文件。"; exit 1 ;;
+  *) err "不支持的系统 $(uname -s)"; exit 1 ;;
 esac
-
 case "$(uname -m)" in
-  aarch64 | aarch64_be | arm64 | armv8b | armv8l) arch="aarch64";;
-  x86_64 | x64 | amd64) arch="x86_64";;
-  armv6l) arch="arm"; suffix="${suffix}eabihf";;
-  armv7l) arch="armv7"; suffix="${suffix}eabihf";;
-  *) echo "Unsupported arch $(uname -m)"; exit 1;;
+  aarch64 | aarch64_be | arm64 | armv8b | armv8l) arch="aarch64" ;;
+  x86_64 | x64 | amd64) arch="x86_64" ;;
+  armv6l) arch="arm"; suffix="${suffix}eabihf" ;;
+  armv7l) arch="armv7"; suffix="${suffix}eabihf" ;;
+  *) err "不支持的架构 $(uname -m)"; exit 1 ;;
 esac
-
 url="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-${arch}${suffix}.tar.gz"
 
-if [ -z "$NO_COLOR" ]; then
-  ansi_reset="\033[0m"
-  ansi_info="\033[35;1m"
-  ansi_error="\033[31m"
-  ansi_underline="\033[4m"
-fi
-
-cmd=${1:-install}
+# ---------- 目标路径 ----------
 temp=$(mktemp)
-
-case $cmd in
-  "run")
-    path=$(mktemp -d)
-    will_run=1
-    ;;
-  "download")
-    path=$(pwd)
-    ;;
-  "install")
-    path=/usr/local/bin
-    ;;
-  *)
-    printf "${ansi_error}Error: Invalid command. Please use 'run', 'download', or 'install'.\n"
-    exit 1
-    ;;
+will_run=""
+case "$cmd" in
+  run) path=$(mktemp -d); will_run=1 ;;
+  download) path=$(pwd) ;;
+  install) path=/usr/local/bin ;;
+  *) err "无效命令，请用 run / download / install。"; exit 1 ;;
 esac
 
-printf "${ansi_reset}${ansi_info}↯ Downloading sshx from ${ansi_underline}%s${ansi_reset}\n" "$url"
+# ---------- 提权助手 ----------
+SUDO=""
+if [ "$(id -u)" -ne 0 ] && have sudo; then SUDO="sudo"; fi
+run_priv() {  # 尽量以 root 执行；无 root 且无 sudo 时返回 111
+  if [ "$(id -u)" -eq 0 ]; then "$@";
+  elif [ -n "$SUDO" ]; then $SUDO "$@";
+  else return 111; fi
+}
+
+BIN="/usr/local/bin/sshx"
+SVC_EXEC="$BIN --quiet"
+
+# ---------- systemd ----------
+setup_systemd() {
+  unit=/etc/systemd/system/sshx.service
+  tmp=$(mktemp)
+  cat > "$tmp" <<EOF
+[Unit]
+Description=sshx collaborative terminal
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+ExecStart=$SVC_EXEC
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+  run_priv cp "$tmp" "$unit" || { rm -f "$tmp"; return 1; }
+  rm -f "$tmp"
+  run_priv systemctl daemon-reload || return 1
+  run_priv systemctl enable sshx >/dev/null 2>&1 || return 1
+  run_priv systemctl restart sshx || return 1
+  info "✓ 已启用 systemd 开机自启。查看状态: systemctl status sshx"
+  return 0
+}
+
+# ---------- OpenRC (Alpine / Gentoo) ----------
+setup_openrc() {
+  svc=/etc/init.d/sshx
+  tmp=$(mktemp)
+  cat > "$tmp" <<EOF
+#!/sbin/openrc-run
+name="sshx"
+description="sshx collaborative terminal"
+command="$BIN"
+command_args="--quiet"
+command_background=true
+pidfile="/run/sshx.pid"
+supervisor="supervise-daemon"
+output_log="/var/log/sshx.log"
+error_log="/var/log/sshx.log"
+depend() { need net; after net; }
+EOF
+  run_priv cp "$tmp" "$svc" || { rm -f "$tmp"; return 1; }
+  rm -f "$tmp"
+  run_priv chmod +x "$svc" || return 1
+  run_priv rc-update add sshx default >/dev/null 2>&1 || return 1
+  run_priv rc-service sshx restart >/dev/null 2>&1 || run_priv rc-service sshx start || return 1
+  info "✓ 已启用 OpenRC 开机自启。查看状态: rc-service sshx status"
+  return 0
+}
+
+# ---------- SysV init (老系统 / update-rc.d / chkconfig) ----------
+setup_sysv() {
+  svc=/etc/init.d/sshx
+  tmp=$(mktemp)
+  cat > "$tmp" <<'EOF'
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          sshx
+# Required-Start:    $network $remote_fs
+# Required-Stop:     $network $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: sshx collaborative terminal
+### END INIT INFO
+BIN=/usr/local/bin/sshx
+ARGS="--quiet"
+PIDFILE=/run/sshx.pid
+case "$1" in
+  start)
+    echo "Starting sshx"
+    if command -v start-stop-daemon >/dev/null 2>&1; then
+      start-stop-daemon --start --background --make-pidfile --pidfile "$PIDFILE" --exec "$BIN" -- $ARGS
+    else
+      "$BIN" $ARGS >/var/log/sshx.log 2>&1 &
+      echo $! > "$PIDFILE"
+    fi
+    ;;
+  stop)
+    echo "Stopping sshx"
+    [ -f "$PIDFILE" ] && kill "$(cat "$PIDFILE")" 2>/dev/null
+    rm -f "$PIDFILE"
+    ;;
+  restart) "$0" stop; sleep 1; "$0" start ;;
+  status)
+    if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+      echo "sshx is running"; else echo "sshx is stopped"; fi
+    ;;
+  *) echo "Usage: $0 {start|stop|restart|status}"; exit 1 ;;
+esac
+EOF
+  run_priv cp "$tmp" "$svc" || { rm -f "$tmp"; return 1; }
+  rm -f "$tmp"
+  run_priv chmod +x "$svc" || return 1
+  if have update-rc.d; then
+    run_priv update-rc.d sshx defaults >/dev/null 2>&1 || return 1
+  elif have chkconfig; then
+    run_priv chkconfig --add sshx >/dev/null 2>&1
+    run_priv chkconfig sshx on >/dev/null 2>&1 || return 1
+  fi
+  run_priv "$svc" restart >/dev/null 2>&1 || run_priv "$svc" start >/dev/null 2>&1 || return 1
+  info "✓ 已启用 SysV init 开机自启。查看状态: service sshx status"
+  return 0
+}
+
+# ---------- 统一入口：识别 init 系统并配置（所有失败只提示、不中断）----------
+setup_service() {
+  info "↯ 正在配置开机自启服务 (sshx)…"
+  if [ "$(id -u)" -ne 0 ] && [ -z "$SUDO" ]; then
+    warn "当前非 root 且无 sudo，跳过开机自启。请用 root 重新执行本命令即可自动配置（加 --no-service 可忽略此提示）。"
+    return 0
+  fi
+  if have systemctl && { [ -d /run/systemd/system ] || [ -d /run/systemd ]; }; then
+    setup_systemd || warn "systemd 服务配置失败，已跳过（不影响 sshx 使用，可稍后手动配置）。"
+  elif have rc-update && have rc-service; then
+    setup_openrc || warn "OpenRC 服务配置失败，已跳过。"
+  elif have update-rc.d || have chkconfig; then
+    setup_sysv || warn "SysV init 服务配置失败，已跳过。"
+  else
+    warn "未识别到 init 系统（systemd/OpenRC/SysV 都没有），已跳过开机自启；sshx 仍可手动运行。"
+  fi
+}
+
+# ---------- 下载 ----------
+info "↯ 下载 sshx: $url"
 http_code=$(curl -L "$url" -o "$temp" -w "%{http_code}")
 if [ "$http_code" -lt 200 ] || [ "$http_code" -gt 299 ]; then
-  printf "${ansi_error}Error: Request had status code ${http_code}.\n"
+  err "下载失败，HTTP 状态码 ${http_code}。"
   cat "$temp" 1>&2
-  printf "${ansi_reset}\n"
+  rm -f "$temp"
   exit 1
 fi
 
-printf "\n${ansi_reset}${ansi_info}↯ Adding sshx binary to ${ansi_underline}%s${ansi_reset}\n" "$path"
-if [ "$(id -u)" -ne 0 ] && [ "$path" = "/usr/local/bin" ]; then
-  sudo tar xf "$temp" -C "$path" || exit 1
+# ---------- 安装 / 解压 ----------
+info "↯ 安装 sshx 到 $path"
+if [ "$cmd" = "install" ]; then
+  run_priv tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
 else
-  tar xf "$temp" -C "$path" || exit 1
+  tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
 fi
+rm -f "$temp"
+info "↯ 完成，现在可以运行 sshx 了。"
 
-printf "\n${ansi_reset}${ansi_info}↯ Done! You can now run sshx.${ansi_reset}\n"
-
+# ---------- run 模式：直接运行一次 ----------
 if [ -n "$will_run" ]; then
   "$path/sshx"
   rm -f "$path/sshx"
+  exit 0
 fi
+
+# ---------- 开机自启（仅 Linux + install 模式 + 未关闭）----------
+if [ "$cmd" = "install" ] && [ -z "$no_service" ]; then
+  if [ "$os" = "linux" ]; then
+    setup_service
+  fi
+elif [ "$cmd" = "install" ] && [ -n "$no_service" ]; then
+  info "↯ 已按要求跳过开机自启配置（--no-service）。需要时可运行: sshx"
+fi
+
+exit 0
