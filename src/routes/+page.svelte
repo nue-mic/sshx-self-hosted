@@ -53,8 +53,7 @@
   <h1
     class="font-medium text-3xl sm:text-4xl md:text-5xl max-w-[26ch] py-2 mb-6 md:mb-0 sm:tracking-tight leading-[1.15]"
   >
-    A secure web-based,
-    <span class="title-gradient">collaborative</span> terminal
+    安全的、基于网页的<span class="title-gradient">协作</span>终端
   </h1>
 
   <div class="relative">
@@ -76,18 +75,17 @@
 
   <section class="my-12 space-y-6 sm:text-lg md:max-w-[460px] text-zinc-400">
     <p>
-      <code class="name">sshx</code> lets you share your terminal with anyone by
-      link, on a
-      <b>multiplayer infinite canvas</b>.
+      <code class="name">sshx</code>
+      让你通过一个链接，把终端分享给任何人——在一块<b>多人无限画布</b>上。
     </p>
     <p>
-      It has <b>real-time collaboration</b>, with remote cursors and chat. It's
-      also <b>fast</b> and <b>end-to-end encrypted</b>, with a lightweight
-      server written in Rust.
+      支持<b>实时协作</b>：能看到彼此的远程光标，还能聊天。它同样<b>快速</b>、<b
+        >端到端加密</b
+      >，服务端用 Rust 编写，非常轻量。
     </p>
     <p>
-      Install <code class="name">sshx</code> with a single command. Use it for teaching,
-      debugging, or cloud access.
+      一条命令即可安装 <code class="name">sshx</code
+      >。适合教学、调试，或远程访问云端机器。
     </p>
   </section>
 
@@ -96,7 +94,7 @@
       class="bg-pink-700 hover:bg-pink-600 active:ring-4 active:ring-pink-500/50 text-lg font-medium px-8 py-2 rounded-full"
       on:click={scrollToInstallation}
     >
-      Get Started
+      开始使用
     </button>
   </div>
 
@@ -105,46 +103,43 @@
       <div class="feature-icon">
         <CastIcon size="14" />
       </div>
-      <h3>Collaborative</h3>
-      <p>Invite people by sharing a secure, unique browser link.</p>
+      <h3>协作</h3>
+      <p>分享一个安全、唯一的浏览器链接即可邀请他人加入。</p>
     </div>
     <div class="feature-block">
       <div class="feature-icon">
         <LockIcon size="14" />
       </div>
-      <h3>End-to-end encrypted</h3>
-      <p>Send data securely; the server never sees what you're typing.</p>
+      <h3>端到端加密</h3>
+      <p>数据安全传输，服务端永远看不到你输入的内容。</p>
     </div>
     <div class="feature-block">
       <div class="feature-icon">
         <HardDriveIcon size="14" />
       </div>
-      <h3>Cross-platform</h3>
-      <p>Use the command-line tool on macOS, Linux, and Windows.</p>
+      <h3>跨平台</h3>
+      <p>命令行工具支持 macOS、Linux 和 Windows。</p>
     </div>
     <div class="feature-block">
       <div class="feature-icon">
         <ImageIcon size="14" />
       </div>
-      <h3>Infinite canvas</h3>
-      <p>Move and resize multiple terminals at once, in any arrangement.</p>
+      <h3>无限画布</h3>
+      <p>在画布上任意摆放、缩放多个终端窗口。</p>
     </div>
     <div class="feature-block">
       <div class="feature-icon">
         <RefreshCwIcon size="14" />
       </div>
-      <h3>Live presence</h3>
-      <p>See other people's names and cursors within the app.</p>
+      <h3>实时在线</h3>
+      <p>在界面里实时看到他人的名字和光标。</p>
     </div>
     <div class="feature-block">
       <div class="feature-icon">
         <Share2Icon size="14" />
       </div>
-      <h3>Ultra-fast mesh networking</h3>
-      <p>
-        Connect from anywhere to the nearest distributed peer in a global
-        network.
-      </p>
+      <h3>极速网状网络</h3>
+      <p>从任何地方就近连接到全球分布式网络中最近的节点。</p>
     </div>
   </div>
 
@@ -156,7 +151,7 @@
     bind:this={installationEl}
     class="mt-32 mb-12 font-medium text-3xl sm:text-4xl md:text-center scroll-mt-16"
   >
-    Installation
+    安装
   </h2>
 
   <section class="installation-section">
@@ -165,10 +160,10 @@
       macOS / Linux
     </h3>
     <div class="text-sm text-zinc-400 md:text-base md:pt-0.5">
-      <p class="mb-3">Run the following in your terminal:</p>
+      <p class="mb-3">在终端里运行以下命令：</p>
       <CopyableCode value="curl -sSf https://sshx.rtxk.org/get | sh" />
 
-      <p class="mt-8 mb-3">Or, download the binary for your platform.</p>
+      <p class="mt-8 mb-3">或者，下载适合你平台的二进制文件。</p>
       <div class="flex flex-wrap gap-2 mb-2">
         <DownloadLink
           href="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-aarch64-apple-darwin.tar.gz"
@@ -212,7 +207,7 @@
       Windows
     </h3>
     <div class="text-sm text-zinc-400 md:text-base md:pt-0.5">
-      <p class="mb-3">Download the executable for your platform.</p>
+      <p class="mb-3">下载适合你平台的可执行文件。</p>
 
       <div class="flex flex-wrap gap-2">
         <DownloadLink
@@ -234,12 +229,11 @@
   <section class="installation-section">
     <h3 class="text-xl sm:text-lg">
       <PackageIcon size="20" class="text-zinc-400 inline-block mr-1 mb-0.5" />
-      Build from source
+      从源码编译
     </h3>
     <div class="text-sm text-zinc-400 md:text-base md:pt-0.5">
       <p class="mb-3">
-        Ensure you have up-to-date versions of Rust and protoc. Compile sshx and
-        add it to the system path.
+        确保已安装较新版本的 Rust 和 protoc，编译 sshx 并加入系统 PATH。
       </p>
       <CopyableCode value="cargo install sshx" />
     </div>
@@ -252,8 +246,8 @@
     </h3>
     <div class="text-sm text-zinc-400 md:text-base md:pt-0.5">
       <p class="mb-3">
-        On GitHub Actions or other CI providers, run this command. It pauses
-        your workflow and starts a collaborative session.
+        在 GitHub Actions 或其他 CI
+        上运行此命令：它会暂停你的流水线，并开启一个协作会话。
       </p>
       <CopyableCode value="curl -sSf https://sshx.rtxk.org/get | sh -s run" />
     </div>
@@ -262,19 +256,18 @@
   <section class="installation-section">
     <h3 class="text-xl sm:text-lg">
       <HardDriveIcon size="20" class="text-zinc-400 inline-block mr-1 mb-0.5" />
-      Server (auto-start on boot)
+      服务器部署（开机自启）
     </h3>
     <div class="text-sm text-zinc-400 md:text-base md:pt-0.5">
       <p class="mb-3">
-        On a Linux server or VPS, this one command installs sshx, enables it as
-        a boot service (systemd / OpenRC / SysV), starts it in the background,
-        and prints this machine's fixed access URL. It keeps running after you
-        close the terminal and across reboots.
+        在 Linux 服务器 / VPS 上，这一条命令会安装
+        sshx、配置为开机自启服务（systemd / OpenRC /
+        SysV）、在后台常驻启动，并打印本机的固定访问地址；关掉终端、断开
+        SSH、重启之后都依然运行。
       </p>
       <CopyableCode value="curl -sSf https://sshx.rtxk.org/get | sh" />
       <p class="mt-3">
-        Append <span class="whitespace-nowrap">-s -- --no-service</span> to install
-        the binary only, without the boot service.
+        加上 <span class="whitespace-nowrap">-s -- --no-service</span> 则只安装二进制、不配置开机自启。
       </p>
     </div>
   </section>
@@ -295,7 +288,7 @@
   </div>
 
   <p class="mb-12 text-center text-zinc-400">
-    open source, &copy; Eric Zhang 2023
+    开源项目，&copy; Eric Zhang 2023（本站为自建分支）
   </p>
 </main>
 
