@@ -74,6 +74,10 @@ systemd / OpenRC / SysV，兼容各类 VPS/虚拟主机）、**立即在后台�
 - 容器等**没有 systemd/init** 的环境：会自动改用 **cron 每分钟保活 + 登录 shell
   钩子 + `@reboot` 自启**，并立即后台常驻。若平台完全不跑 cron，也可把
   `/usr/local/bin/sshx-keepalive` 加进平台的“启动命令/启动脚本”里最稳。
+- **虚拟主机 / 共享主机（无 root）兼容**：`/usr/local/bin` 不可写、`/tmp` 挂了
+  `noexec` 时会自动改装到你的家目录（`~/.local/bin` 等），并**解压后实测能否执
+  行**、不行就自动换目录，同时把该目录加入 `PATH`。若整机禁止执行自带二进制则会
+  明确报错。
 - **主机面板（宝塔/aaPanel 等）计划任务保活**：可以直接把
   `curl -sSf https://sshx.rtxk.org/get | sh` 放进面板的定时任务（如每 5 分钟）。
   脚本是 **幂等**的——已在运行就直接跳过（不重下、不重推电报），掉线了才自动拉起

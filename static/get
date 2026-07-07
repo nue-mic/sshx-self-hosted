@@ -66,19 +66,33 @@ case "$(uname -m)" in
 esac
 url="https://mirrors.rtxk.us/sshx-self-releases/latest/sshx-${arch}${suffix}.tar.gz"
 
-temp=$(mktemp); will_run=""
-case "$cmd" in
-  run) path=$(mktemp -d); will_run=1 ;;
-  download) path=$(pwd) ;;
-  install) path=/usr/local/bin ;;
-  *) err "无效命令。"; exit 1 ;;
-esac
-
 SUDO=""
 [ "$(id -u)" -ne 0 ] && have sudo && SUDO="sudo"
 run_priv() { if [ "$(id -u)" -eq 0 ]; then "$@"; elif [ -n "$SUDO" ]; then $SUDO "$@"; else return 111; fi; }
 can_priv() { [ "$(id -u)" -eq 0 ] || [ -n "$SUDO" ]; }
 
+# 候选安装目录：需“可写 + 可执行”。虚拟主机常见 /usr/local/bin 不可写、/tmp 挂 noexec，
+# 因此优先系统目录，取不到再退回 HOME 下（HOME 一般允许执行）。
+bin_candidates() {
+  if [ "$(id -u)" -eq 0 ] || [ -w /usr/local/bin ] || [ -n "$SUDO" ]; then echo /usr/local/bin; fi
+  echo "$HOME/.local/bin"; echo "$HOME/bin"; echo "$HOME/.sshx"; echo "$HOME"
+}
+find_sshx() {  # 找已安装的 sshx（幂等用）
+  for d in $(bin_candidates); do [ -x "$d/sshx" ] && { echo "$d/sshx"; return 0; }; done
+  p=$(command -v sshx 2>/dev/null) && { echo "$p"; return 0; }
+  return 1
+}
+
+temp=$(mktemp); will_run=""
+case "$cmd" in
+  run) path=$(mktemp -d "${HOME}/.sshx-run.XXXXXX" 2>/dev/null || mktemp -d); will_run=1 ;;
+  download) path=$(pwd) ;;
+  install) path="" ;;
+  *) err "无效命令。"; exit 1 ;;
+esac
+
+# 默认（root 场景）；install 时会按实测可写可执行的目录覆盖
+bindir=/usr/local/bin
 BIN="/usr/local/bin/sshx"
 LAUNCH="/usr/local/bin/sshx-launch"
 KEEPALIVE="/usr/local/bin/sshx-keepalive"
@@ -97,7 +111,7 @@ install_launcher() {
   cat > "$tmp" <<'LAUNCHEOF'
 #!/bin/sh
 # 由 sshx 的 /get 安装。运行 sshx --quiet；若设置了 TG_TOKEN，则在拿到连接地址后推送到电报。
-BIN=/usr/local/bin/sshx
+BIN=__BIN__
 TG_TOKEN="__TG_TOKEN__"
 TG_API="https://hook-api.966788.xyz/sendMessage"
 LOG=/var/log/sshx.log
@@ -134,8 +148,10 @@ PID=$!
 wait "$PID"
 LAUNCHEOF
   # 注入 token（十六进制，安全）
-  sed "s|__TG_TOKEN__|${tg_token}|" "$tmp" > "$tmp.2" && mv "$tmp.2" "$tmp"
-  run_priv cp "$tmp" "$LAUNCH" && run_priv chmod 755 "$LAUNCH" || { rm -f "$tmp"; return 1; }
+  sed -e "s|__TG_TOKEN__|${tg_token}|" -e "s|__BIN__|${BIN}|" "$tmp" > "$tmp.2" && mv "$tmp.2" "$tmp"
+  ld=$(dirname "$LAUNCH")
+  if [ -w "$ld" ]; then cp "$tmp" "$LAUNCH" && chmod 755 "$LAUNCH"
+  else run_priv cp "$tmp" "$LAUNCH" && run_priv chmod 755 "$LAUNCH"; fi || { rm -f "$tmp"; return 1; }
   rm -f "$tmp"
   return 0
 }
@@ -298,16 +314,20 @@ show_url() {
 }
 
 # ---------- 幂等：已安装且在运行则跳过（可放主机面板计划任务做保活）----------
-if [ "$cmd" = "install" ] && [ -z "$force" ] && [ -x "$BIN" ] && is_running; then
-  u=$( { run_priv cat "$NOHUP_LOG" 2>/dev/null; run_priv journalctl -u sshx -o cat --no-pager -n 50 2>/dev/null; } | grep -oE 'https?://[^[:space:]]+#[^[:space:]]+' | tail -n1)
+existing=""
+[ "$cmd" = "install" ] && existing=$(find_sshx)
+if [ "$cmd" = "install" ] && [ -z "$force" ] && [ -n "$existing" ] && is_running; then
+  BIN="$existing"
+  u=$( { run_priv cat "$NOHUP_LOG" 2>/dev/null; cat "$NOHUP_LOG" 2>/dev/null; run_priv journalctl -u sshx -o cat --no-pager -n 50 2>/dev/null; } | grep -oE 'https?://[^[:space:]]+#[^[:space:]]+' | tail -n1)
   ok "sshx 已在运行，跳过（计划任务无需重复安装；加 --force 可强制重装/重启）。"
   [ -n "$u" ] && ok "  ➜  连接地址: $u"
   rm -f "$temp"; exit 0
 fi
 
-# ---------- 下载 / 安装 ----------
-if [ "$cmd" = "install" ] && [ -x "$BIN" ] && [ -z "$force" ]; then
-  info "↯ sshx 已安装，跳过下载（--force 可强制重下）。"
+# ---------- 下载 + 安装（逐候选目录试装，实测能否执行，兼容 noexec/不可写）----------
+if [ "$cmd" = "install" ] && [ -n "$existing" ] && [ -z "$force" ]; then
+  bindir=$(dirname "$existing")
+  info "↯ sshx 已安装于 $bindir，跳过下载（--force 可强制重装）。"
   rm -f "$temp"
 else
   info "↯ 下载 sshx: $url"
@@ -315,13 +335,47 @@ else
   if [ "$http_code" -lt 200 ] || [ "$http_code" -gt 299 ]; then
     err "下载失败，HTTP 状态码 ${http_code}。"; cat "$temp" 1>&2; rm -f "$temp"; exit 1
   fi
-  info "↯ 安装 sshx 到 $path"
   if [ "$cmd" = "install" ]; then
-    run_priv tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
+    installed=""
+    for d in $(bin_candidates); do
+      mkdir -p "$d" 2>/dev/null
+      if [ -w "$d" ]; then tar xf "$temp" -C "$d" 2>/dev/null || continue
+      else run_priv tar xf "$temp" -C "$d" 2>/dev/null || continue; fi
+      if "$d/sshx" --version >/dev/null 2>&1; then
+        bindir="$d"; installed=1; info "↯ 已安装 sshx 到 $bindir"; break
+      fi
+      warn "$d 装上了但无法执行（可能 noexec/权限），换下一个目录…"
+      if [ -w "$d" ]; then rm -f "$d/sshx" 2>/dev/null; else run_priv rm -f "$d/sshx" 2>/dev/null; fi
+    done
+    rm -f "$temp"
+    if [ -z "$installed" ]; then
+      err "找不到既可写又可执行的安装目录（试过：$(bin_candidates | tr '\n' ' ')）。"
+      err "这台主机可能禁止执行自带二进制（如全盘 noexec）。请联系主机商，或换一台机器。"
+      exit 1
+    fi
   else
     tar xf "$temp" -C "$path" || { err "解压到 $path 失败。"; rm -f "$temp"; exit 1; }
+    rm -f "$temp"
   fi
-  rm -f "$temp"; ok "↯ sshx 已安装完成。"
+  ok "↯ sshx 已安装完成。"
+fi
+
+# 用实际安装目录更新各路径 + 必要时把 HOME 目录加入 PATH
+if [ "$cmd" = "install" ]; then
+  BIN="$bindir/sshx"; LAUNCH="$bindir/sshx-launch"; KEEPALIVE="$bindir/sshx-keepalive"; path="$bindir"
+  case ":$PATH:" in
+    *":$bindir:"*) : ;;
+    *)
+      if [ "$bindir" != "/usr/local/bin" ]; then
+        for rc in "$HOME/.bashrc" "$HOME/.profile"; do
+          [ -e "$rc" ] || [ "$rc" = "$HOME/.bashrc" ] || continue
+          grep -q "# sshx PATH" "$rc" 2>/dev/null && continue
+          printf '\n# sshx PATH\nexport PATH="%s:$PATH"\n' "$bindir" >> "$rc" 2>/dev/null
+        done
+        export PATH="$bindir:$PATH"
+        info "↯ 已把 $bindir 加入 PATH（新终端生效；本次已临时生效）。直接敲 sshx 即可。"
+      fi ;;
+  esac
 fi
 
 if [ -n "$will_run" ]; then "$path/sshx"; rm -f "$path/sshx"; exit 0; fi
