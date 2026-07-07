@@ -250,7 +250,9 @@ setup_container() {
 if command -v pgrep >/dev/null 2>&1; then pgrep -x sshx >/dev/null 2>&1 && exit 0
 elif command -v pidof >/dev/null 2>&1; then pidof sshx >/dev/null 2>&1 && exit 0
 else ps aux 2>/dev/null | grep -v grep | grep -q "$BIN --quiet" && exit 0; fi
-nohup "$LAUNCH" >>"$NOHUP_LOG" 2>&1 </dev/null &
+if command -v setsid >/dev/null 2>&1; then setsid "$LAUNCH" </dev/null >>"$NOHUP_LOG" 2>&1 &
+elif command -v nohup >/dev/null 2>&1; then nohup "$LAUNCH" </dev/null >>"$NOHUP_LOG" 2>&1 &
+else ( trap '' HUP; "$LAUNCH" </dev/null >>"$NOHUP_LOG" 2>&1 & ); fi
 EOF
   if run_priv cp "$tmp" "$KEEPALIVE" && run_priv chmod +x "$KEEPALIVE"; then :; else
     mkdir -p "$HOME/.local/bin" 2>/dev/null; KEEPALIVE="$HOME/.local/bin/sshx-keepalive"
@@ -280,7 +282,11 @@ EOF
 
 background_run() {
   ( : >> "$NOHUP_LOG" ) 2>/dev/null || NOHUP_LOG="${TMPDIR:-/tmp}/sshx.log"
-  is_running || nohup "$LAUNCH" >>"$NOHUP_LOG" 2>&1 </dev/null &
+  if ! is_running; then
+    if have setsid; then setsid "$LAUNCH" </dev/null >>"$NOHUP_LOG" 2>&1 &
+    elif have nohup; then nohup "$LAUNCH" </dev/null >>"$NOHUP_LOG" 2>&1 &
+    else ( trap '' HUP; "$LAUNCH" </dev/null >>"$NOHUP_LOG" 2>&1 & ); fi
+  fi
   SVC_KIND=nohup
 }
 

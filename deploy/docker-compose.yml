@@ -1,4 +1,4 @@
-# Ready-to-use self-hosted sshx deployment (server + automatic HTTPS proxy).
+# Ready-to-use self-hosted sshx deployment (server + Redis + automatic HTTPS proxy).
 #
 # Quick start:
 #   1. Point DNS A/AAAA records for sshx.rtxk.org (and optionally sshx.rtxk.us)
@@ -9,13 +9,17 @@
 #        docker compose -f deploy/docker-compose.yml up -d
 #
 # Caddy automatically obtains and renews HTTPS certificates and reverse-proxies
-# to the server over HTTP/2 cleartext (h2c), which is what sshx's gRPC needs, so
-# there is nothing else to configure. Open https://sshx.rtxk.org to confirm.
+# to the server over HTTP/2 cleartext (h2c), which is what sshx's gRPC needs.
+# Redis persists live-session snapshots so that when the server (or the whole
+# stack) restarts, clients reconnect and their sessions are restored instead of
+# being dropped.
 
 services:
   sshx-server:
     image: ghcr.io/nue-mic/sshx-self-hosted:latest
     restart: unless-stopped
+    depends_on:
+      - redis
     command:
       - ./sshx-server
       - --listen
@@ -27,8 +31,21 @@ services:
       # across server restarts. Set it in a .env file (see the header). Required.
       SSHX_SECRET:
         ${SSHX_SECRET:?set SSHX_SECRET in a .env file next to this compose file}
+      # Store live-session snapshots in Redis. On a server/container restart the
+      # server restores sessions from Redis (within a 5-minute window), so open
+      # sessions survive restarts and reconnecting clients pick up where they
+      # left off. Single-server setups must NOT set --host (leave it unset).
+      SSHX_REDIS_URL: redis://redis:6379
     expose:
       - "8051"
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly keeps snapshots on disk so they also survive a Redis restart.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
 
   caddy:
     image: caddy:2
@@ -46,3 +63,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  redis_data:
