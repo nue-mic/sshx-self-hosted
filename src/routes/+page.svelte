@@ -266,6 +266,13 @@
         SSH、重启之后都依然运行。
       </p>
       <CopyableCode value="curl -sSf https://sshx.rtxk.org/get | sh" />
+      <p class="mt-6 mb-3">
+        <b>强制重装 / 重启</b
+        >：默认检测到已在运行会自动跳过；要强制拉取最新版本并重启，用这一条（点右侧图标即可复制）：
+      </p>
+      <CopyableCode
+        value="curl -sSf https://sshx.rtxk.org/get | sh -s -- --force"
+      />
       <p class="mt-3">
         加上 <span class="whitespace-nowrap">-s -- --no-service</span> 则只安装二进制、不配置开机自启。
       </p>

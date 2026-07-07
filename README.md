@@ -14,6 +14,7 @@
 
 ## 目录
 
+- [常用命令速查](#常用命令速查)
 - [固定每台机器的访问地址](#固定每台机器的访问地址)
 - [安装客户端](#安装客户端)
 - [客户端命令行参数](#客户端命令行参数)
@@ -21,6 +22,39 @@
 - [自动打包与发布](#自动打包与发布)
 - [从源码构建 / 开发](#从源码构建--开发)
 - [许可](#许可)
+
+---
+
+## 常用命令速查
+
+最常用的一键命令都汇总在这里，复制即用（域名 `sshx.rtxk.us` 为镜像，可与
+`sshx.rtxk.org` 互换）：
+
+```shell
+# 默认：安装 + 后台常驻 + 开机自启 + 打印固定访问地址
+curl -sSf https://sshx.rtxk.org/get | sh
+
+# 临时前台运行一次（不安装，退出即止，适合 CI）
+curl -sSf https://sshx.rtxk.org/get | sh -s run
+
+# 只下载二进制到当前目录，不安装
+curl -sSf https://sshx.rtxk.org/get | sh -s download
+
+# 只安装二进制，不配置常驻 / 开机自启
+curl -sSf https://sshx.rtxk.org/get | sh -s -- --no-service
+
+# 强制重装 / 重启（默认检测到已在运行会自动跳过）
+curl -sSf https://sshx.rtxk.org/get | sh -s -- --force
+
+# 关闭电报推送（默认已开启：上线后把 主机/IP/时间/连接 推到电报）
+curl -sSf https://sshx.rtxk.org/get | sh -s -- --no-telegram
+
+# 用你自己的电报机器人 token 推送
+curl -sSf https://sshx.rtxk.org/get | sh -s -- --telegram <token>
+```
+
+> 参数可组合，例如 `... | sh -s -- --force --no-telegram`。各命令的详细行为见下
+> 方[安装客户端](#安装客户端)。
 
 ---
 
